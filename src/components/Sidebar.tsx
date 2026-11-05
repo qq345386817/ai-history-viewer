@@ -16,6 +16,7 @@ import {
 } from "../../shared/types";
 import { shortPath } from "../format";
 import type { RefObject } from "react";
+import ThemeControl from "./ThemeControl";
 
 export default function Sidebar({
   catalog,
@@ -136,6 +137,7 @@ export default function Sidebar({
             <Database size={17} />
             数据源
           </button>
+          <ThemeControl />
           <p className="readonly">
             <LockKeyhole size={13} />
             只读访问
