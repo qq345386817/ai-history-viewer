@@ -1,0 +1,23 @@
+node_modules/
+dist/
+dist-server/
+*.log
+.DS_Store
+config.local.json
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+config.*.local.json
+*.sqlite
+*.sqlite-*
+
+# Test output and coverage
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# Local design explorations and implementation review notes
+/design/
