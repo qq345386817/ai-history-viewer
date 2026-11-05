@@ -22,6 +22,7 @@ For development, run `npm run dev`, which also uses port 4317.
 
 ## Usage
 
+- Appearance follows your system by default. Use the **System / Light / Dark** controls at the bottom of the sidebar to choose a theme. Your preference is saved in this browser and synced across tabs; system mode also responds to appearance changes while the page is open. On mobile, open project navigation to access these controls.
 - The left sidebar groups sessions by **full project path**. Projects with the same name but different paths remain separate; sessions from different tools that share a path appear under the same project. Each entry shows the project name and path; hover to see the full path.
 - Select one or more data sources at the bottom left to filter the project list, per-project session counts, and session list together. The tool selector in the middle column stays in sync with these selections, so you can quickly switch to one tool or all tools.
 - The middle column lists sessions by date, with adjustable sorting.
@@ -95,7 +96,7 @@ npm exec playwright -- install chromium
 npm run test:e2e
 ```
 
-Node tests cover format parsing, duplicate messages, Windows/POSIX paths, project merging across tools, recovery from damaged files, file additions and deletions, hidden assistant replies by default, full-text search, read-only HTTP and SSE, Codex App databases, project assignments, and Gemini path matching. Six Chromium browser tests cover desktop interactions, live updates, a 390px mobile layout, real clipboard copying and failure feedback, multiple data-source selections, cross-project search and precise navigation within long sessions, and session name display and rename synchronization. Tests create isolated sample records only in the system temporary directory and verify that the application has not modified them.
+Node tests cover format parsing, duplicate messages, Windows/POSIX paths, project merging across tools, recovery from damaged files, file additions and deletions, hidden assistant replies by default, full-text search, read-only HTTP and SSE, Codex App databases, project assignments, and Gemini path matching. Chromium browser tests cover desktop interactions, live updates, a 390px mobile layout, real clipboard copying and failure feedback, multiple data-source selections, cross-project search and precise navigation within long sessions, and session name display and rename synchronization. Appearance tests also cover system changes, saved preferences, tab synchronization, dark Markdown contrast, mobile controls and dialogs, applying the theme before React loads, and unavailable browser storage. Tests create isolated sample records only in the system temporary directory and verify that the application has not modified them.
 
 The project has been verified on macOS with Node.js 22 and Chromium. Windows and Linux use cross-platform Node APIs, and path handling has automated test coverage, but the application has not yet been verified on those operating systems. The index is held in memory; resource usage with very large histories has not been stress-tested.
 
