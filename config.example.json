@@ -1,0 +1,12 @@
+{
+  "port": 4317,
+  "pollInterval": 2000,
+  "roots": {
+    "codex": "~/.codex",
+    "gemini": "~/.gemini",
+    "claude": "~/.claude"
+  },
+  "projectPaths": {
+    "example-gemini-project-hash-or-folder-name": "/absolute/path/to/project"
+  }
+}
