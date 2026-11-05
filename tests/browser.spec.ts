@@ -390,3 +390,171 @@ test('Codex display names appear in list/header and refresh after metadata-only 
     await expect(page.locator('.session-row strong')).toHaveText('登录体验检查');
   } finally { await rm(index, {force:true}); }
 });
+
+test("appearance follows the system, persists manual choices, and syncs across tabs", async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => {
+    if (["error", "warning"].includes(message.type())) errors.push(message.text());
+  });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  const root = page.locator("html");
+  const appearance = page.getByRole("group", { name: "外观主题" });
+  await expect(page).toHaveTitle("回声 Echo · AI 会话历史");
+  const catalog = await (await page.request.get("/api/catalog")).json();
+  await expect(page.locator(".message.user")).toHaveCount(catalog.sessions[0].userCount);
+  await expect(root).toHaveAttribute("data-theme", "dark");
+  await expect(root).toHaveCSS("color-scheme", "dark");
+  await expect(appearance.getByRole("button", { name: "跟随系统" })).toHaveAttribute("aria-pressed", "true");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(root).toHaveAttribute("data-theme", "dark");
+
+  await appearance.getByRole("button", { name: "浅色", exact: true }).click();
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await page.reload();
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await expect(appearance.getByRole("button", { name: "浅色", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  const other = await context.newPage();
+  await other.goto("/");
+  await expect(other.locator("html")).toHaveAttribute("data-theme", "light");
+  await other.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "深色", exact: true }).click();
+  await expect(root).toHaveAttribute("data-theme", "dark");
+  await expect(appearance.getByRole("button", { name: "深色", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(root).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#171c22");
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  await appearance.getByRole("button", { name: "跟随系统" }).click();
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await expect(other.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "跟随系统" })).toHaveAttribute("aria-pressed", "true");
+  await other.close();
+  expect(errors).toEqual([]);
+});
+
+test("dark Markdown, search highlights, source dialog, and mobile appearance remain readable", async ({ page }) => {
+  const file = path.join(path.dirname(f.codexFile), "theme-rendering.jsonl");
+  const content = [
+    "深色模式阅读验证",
+    "普通段落与 **强调文字**，包含 `inline code` 和 [文档链接](https://example.com)。",
+    "> 引用内容应保留清晰的文字对比度。",
+    "```tsx\nconst theme = 'contrast-example';\n```",
+    "| 类型 | 状态 |\n| --- | --- |\n| 深色主题 | contrast-example |",
+    "- [x] contrast-example\n- [ ] 浅色模式回归",
+    "---",
+    "代码、表格、引用和搜索结果使用同一套主题。",
+  ].join("\n\n");
+  await writeFile(file, jsonl([
+    { type: "session_meta", payload: { id: "theme-rendering", cwd: "/Projects/atlas-web" } },
+    { type: "event_msg", timestamp: "2026-11-05T08:00:00Z", payload: { type: "user_message", message: content } },
+  ]));
+  try {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/");
+    await page.getByRole("textbox", { name: "搜索会话" }).fill("contrast-example");
+    await expect(page.locator(".session-row")).toHaveCount(1, { timeout: 10000 });
+    await page.locator(".session-row").click();
+    await expect(page.locator(".markdown mark")).toHaveCount(3);
+    await expect(page.locator(".markdown pre")).toBeVisible();
+    const contrasts = await page.evaluate(() => {
+      const luminance = (color: string) => {
+        const rgb = color.match(/[\d.]+/g)!.slice(0, 3).map(Number).map(v => {
+          const c = v / 255;
+          return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+        return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+      };
+      return [
+        [".markdown", ".reader"],
+        [".markdown pre", ".markdown pre"],
+        [".markdown p code", ".markdown p code"],
+        [".markdown th", ".markdown th"],
+        [".markdown blockquote", ".reader"],
+        [".markdown mark", ".markdown mark"],
+        [".reader-footer", ".reader"],
+        [".session-row.selected p", ".session-row.selected"],
+      ].map(([foreground, background]) => {
+        const text = luminance(getComputedStyle(document.querySelector(foreground)!).color);
+        const surface = luminance(getComputedStyle(document.querySelector(background)!).backgroundColor);
+        return { selector: foreground, ratio: (Math.max(text, surface) + 0.05) / (Math.min(text, surface) + 0.05) };
+      });
+    });
+    for (const { selector, ratio } of contrasts) expect(ratio, selector).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: path.join(tmpdir(), "echo-dark-desktop.png"), animations: "disabled" });
+    await page.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "浅色", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.screenshot({ path: path.join(tmpdir(), "echo-light-desktop.png"), animations: "disabled" });
+    await page.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "深色", exact: true }).click();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator(".reader")).toBeVisible();
+    await expect(page.locator(".markdown pre")).toBeInViewport();
+    await page.screenshot({ path: path.join(tmpdir(), "echo-dark-mobile.png"), animations: "disabled" });
+    expect(await page.locator("body").evaluate(el => el.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("button", { name: "返回会话列表" }).click();
+    await page.getByRole("button", { name: "打开项目导航" }).click();
+    const appearance = page.getByRole("group", { name: "外观主题" });
+    await expect(appearance).toBeInViewport();
+    await page.getByRole("button", { name: "数据源", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCSS("color-scheme", "dark");
+    await page.screenshot({ path: path.join(tmpdir(), "echo-dark-sources.png"), animations: "disabled" });
+    await page.getByRole("button", { name: "关闭数据源" }).click();
+    await appearance.getByRole("button", { name: "浅色", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.locator(".close-sidebar").click();
+    await expect(page.getByRole("heading", { name: "会话历史", exact: true })).toBeVisible();
+  } finally {
+    await rm(file, { force: true });
+  }
+});
+
+test("appearance is applied before React loads and tolerates unavailable or invalid storage", async ({ page, context }) => {
+  // Keep React from running to verify that the independent CSP-safe bootstrap sets the first frame.
+  await page.route("**/assets/*.js", route => route.fulfill({ contentType: "application/javascript", body: "" }));
+  await page.addInitScript(() => localStorage.setItem("echo-theme", "dark"));
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+  await expect(page.locator("#root")).toBeEmpty();
+
+  const blocked = await context.newPage();
+  const errors: string[] = [];
+  blocked.on("pageerror", error => errors.push(error.message));
+  blocked.on("console", message => {
+    if (["error", "warning"].includes(message.type())) errors.push(message.text());
+  });
+  await blocked.addInitScript(() => {
+    for (const method of ["getItem", "setItem"]) Object.defineProperty(Storage.prototype, method, {
+      configurable: true,
+      value: () => { throw new DOMException("Storage disabled", "SecurityError"); },
+    });
+  });
+  await blocked.emulateMedia({ colorScheme: "dark" });
+  await blocked.goto("/");
+  await expect(blocked.getByRole("heading", { name: "会话历史", exact: true })).toBeVisible();
+  await expect(blocked.locator("html")).toHaveAttribute("data-theme", "dark");
+  await blocked.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "浅色", exact: true }).click();
+  await expect(blocked.locator("html")).toHaveAttribute("data-theme", "light");
+  await blocked.reload();
+  await expect(blocked.locator("html")).toHaveAttribute("data-theme-preference", "system");
+  await expect(blocked.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(errors).toEqual([]);
+  await blocked.close();
+
+  const invalid = await context.newPage();
+  await invalid.addInitScript(() => localStorage.setItem("echo-theme", "invalid"));
+  await invalid.emulateMedia({ colorScheme: "light" });
+  await invalid.goto("/");
+  await expect(invalid.locator("html")).toHaveAttribute("data-theme-preference", "system");
+  await expect(invalid.locator("html")).toHaveAttribute("data-theme", "light");
+  await invalid.close();
+});
