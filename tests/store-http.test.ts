@@ -117,6 +117,12 @@ test("HTTP API is read-only, user-only by default, full-text search respects the
   const base = `http://127.0.0.1:${port}`;
   const abort = new AbortController();
   try {
+    const health = await (await fetch(`${base}/api/health`)).json();
+    assert.equal(health.app, "echo-ai-history");
+    assert.equal(health.pid, process.pid);
+    assert.equal(health.projectRoot, null);
+    assert.equal((await fetch(`${base}/api/health`, { method: "POST" })).status, 405);
+    assert.equal((await fetch(`${base}/api/health`, { headers: { Origin: "https://evil.example" } })).status, 403);
     const catalog = await (await fetch(`${base}/api/catalog`)).json();
     const id = catalog.sessions.find((s: any) => s.provider === "codex").id;
     const session = await (await fetch(`${base}/api/sessions/${id}`)).json();

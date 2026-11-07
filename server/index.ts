@@ -31,6 +31,7 @@ const { server, closeStreams } = createHistoryServer(store, {
   staticDir: path.join(appRoot, "dist"),
   middleware: vite?.middlewares,
   dev,
+  projectRoot: path.resolve(appRoot),
 });
 server.on("error", (error: NodeJS.ErrnoException) => {
   console.error(

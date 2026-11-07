@@ -21,3 +21,6 @@ blob-report/
 
 # Local design explorations and implementation review notes
 /design/
+
+# Generated macOS launcher (contains this checkout's absolute path)
+/Echo.app/

@@ -6,7 +6,7 @@ import type { HistoryStore } from "./store.js";
 type Middleware = (req: any, res: any, next: (error?: unknown) => void) => void;
 export function createHistoryServer(
   store: HistoryStore,
-  options: { staticDir?: string; middleware?: Middleware; dev?: boolean } = {},
+  options: { staticDir?: string; middleware?: Middleware; dev?: boolean; projectRoot?: string } = {},
 ) {
   const streams = new Set<ServerResponse>();
   const onChange = (revision: number) => {
@@ -52,6 +52,15 @@ export function createHistoryServer(
       res.end(req.method === "HEAD" ? undefined : JSON.stringify(data));
     };
     try {
+      if (url.pathname === "/api/health") {
+        json(200, {
+          app: "echo-ai-history",
+          pid: process.pid,
+          projectRoot: options.projectRoot || null,
+          launcherId: process.env.ECHO_LAUNCHER_ID || null,
+        });
+        return;
+      }
       if (url.pathname === "/api/events" && req.method === "GET") {
         res.writeHead(200, {
           "Content-Type": "text/event-stream",

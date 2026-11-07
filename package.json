@@ -11,6 +11,11 @@
     "dev": "tsx server/index.ts --dev",
     "build": "tsc --noEmit -p tsconfig.json && vite build && tsc -p tsconfig.server.json",
     "start": "node dist-server/server/index.js",
+    "start:background": "bash scripts/echo.sh start --open",
+    "stop": "bash scripts/echo.sh stop",
+    "status": "bash scripts/echo.sh status",
+    "app:macos": "bash scripts/create-macos-app.sh",
+    "test:launcher": "node --test tests/launcher.test.mjs",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "npm run build && playwright test",
     "check": "tsc --noEmit -p tsconfig.json"
