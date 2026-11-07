@@ -1,9 +1,14 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { fixtures, jsonl } from "./fixtures";
+
+async function openSettings(page: Page) {
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "设置", exact: true })).toBeVisible();
+}
 
 let f: Awaited<ReturnType<typeof fixtures>>;
 let child: ChildProcess;
@@ -41,7 +46,7 @@ test.afterAll(async () => {
   if (f) await rm(f.dir, { recursive: true, force: true });
 });
 
-test("desktop: project grouping, tool filter, search, reply switch, source dialog and read-only rendering", async ({
+test("desktop: project grouping, tool filter, search, reply switch, settings dialog and read-only rendering", async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -61,6 +66,7 @@ test("desktop: project grouping, tool filter, search, reply switch, source dialo
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   await expect(page.locator(".message.user")).toHaveCount(4);
   await expect(page.locator(".message.assistant")).toHaveCount(0);
+  await expect(page.locator(".message.user .message-meta time").first()).toHaveText("2026-11-04 14:20");
   await expect(
     page.getByRole("switch", { name: "显示 AI 回复" }),
   ).toHaveAttribute("aria-checked", "false");
@@ -99,11 +105,17 @@ test("desktop: project grouping, tool filter, search, reply switch, source dialo
   await expect(page.locator(".session-row")).toHaveCount(0);
   await page.getByRole("button", { name: "清空搜索" }).click();
   await expect(page.locator(".session-row")).toHaveCount(3);
-  await page.getByRole("button", { name: "数据源", exact: true }).click();
+  await expect(page.locator(".sidebar").getByRole("group", { name: "外观主题" })).toHaveCount(0);
+  await expect(page.locator(".sidebar").getByRole("button", { name: /^筛选 / })).toHaveCount(0);
+  await openSettings(page);
   await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "外观", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "本地数据源", exact: true })).toBeVisible();
   await expect(page.getByText("Gemini CLI", { exact: true })).toBeVisible();
+  await expect(page.locator(".source-toggle[aria-pressed='true']")).toHaveCount(3);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "设置", exact: true })).toBeFocused();
   await page.getByLabel("会话排序").selectOption("oldest");
   await expect(page.locator(".session-row").first()).toContainText(
     "排查 API 请求超时",
@@ -141,7 +153,7 @@ test("live updates: existing reader gets appended prompts and newly created sess
     jsonl([
       {
         type: "event_msg",
-        timestamp: "2026-11-04T07:00:00Z",
+        timestamp: "2026-11-05T00:00:00Z",
         payload: {
           type: "user_message",
           message: "自动刷新验证：新追加的提问",
@@ -153,6 +165,8 @@ test("live updates: existing reader gets appended prompts and newly created sess
     page.getByText("自动刷新验证：新追加的提问", { exact: true }),
   ).toBeVisible({ timeout: 10000 });
   await expect(page.locator(".message.user")).toHaveCount(5);
+  await expect(page.locator(".message.user .message-meta time").first()).toHaveText("2026-11-04 14:20");
+  await expect(page.locator(".message.user .message-meta time").last()).toHaveText("2026-11-05 08:00");
   const newFile = path.join(
     path.dirname(f.codexFile),
     "rollout-brand-new.jsonl",
@@ -204,6 +218,8 @@ test("mobile: list → reader → back, project drawer and no horizontal overflo
   );
   await page.getByRole("switch", { name: "显示 AI 回复" }).click();
   await expect(page.locator(".message.assistant")).toHaveCount(1);
+  await expect(page.locator(".message.user .message-meta time")).toHaveText("2026-11-04 11:08");
+  await expect(page.locator(".message.assistant .message-meta time")).toHaveText("2026-11-04 11:09");
   await expect(page.locator(".reader .toggle-track")).toHaveCSS(
     "background-color",
     "rgb(19, 133, 98)",
@@ -316,27 +332,35 @@ test("source multi-select filters project counts; global search crosses the sele
     await expect(page.locator(".session-row")).toHaveCount(5, {
       timeout: 10000,
     });
+    await openSettings(page);
     await page
       .getByRole("button", { name: "筛选 Gemini", exact: true })
       .click();
     await page
       .getByRole("button", { name: "筛选 Claude", exact: true })
       .click();
+    await page.getByRole("button", { name: "关闭设置" }).click();
     await expect(page.getByLabel("筛选 AI 工具")).toHaveValue("codex");
     await expect(page.locator(".projects .project-copy")).toHaveCount(2);
     await expect(page.locator(".projects")).not.toContainText("design-system");
     await expect(page.getByRole("button", { name: /全部项目/ })).toContainText(
       "3",
     );
+    await openSettings(page);
     await page.getByRole("button", { name: "筛选 Codex", exact: true }).click();
+    await page.getByRole("button", { name: "关闭设置" }).click();
     await expect(page.locator(".session-row")).toHaveCount(0);
     await expect(page.locator(".projects .project-copy")).toHaveCount(0);
+    await openSettings(page);
     await page
       .getByRole("button", { name: "筛选 Gemini", exact: true })
       .click();
+    await page.getByRole("button", { name: "关闭设置" }).click();
     await expect(page.locator(".projects .project-copy")).toHaveCount(1);
     await expect(page.locator(".projects")).toContainText("design-system");
+    await openSettings(page);
     await page.getByRole("button", { name: "筛选 Codex", exact: true }).click();
+    await page.getByRole("button", { name: "关闭设置" }).click();
     await expect(page.locator(".projects .project-copy")).toHaveCount(3);
     await page.getByRole("button", { name: /design-system/ }).click();
     await expect(page.locator(".session-row")).toHaveCount(1);
@@ -406,6 +430,7 @@ test("appearance follows the system, persists manual choices, and syncs across t
   await expect(page.locator(".message.user")).toHaveCount(catalog.sessions[0].userCount);
   await expect(root).toHaveAttribute("data-theme", "dark");
   await expect(root).toHaveCSS("color-scheme", "dark");
+  await openSettings(page);
   await expect(appearance.getByRole("button", { name: "跟随系统" })).toHaveAttribute("aria-pressed", "true");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(root).toHaveAttribute("data-theme", "light");
@@ -419,11 +444,13 @@ test("appearance follows the system, persists manual choices, and syncs across t
   await expect(root).toHaveAttribute("data-theme", "light");
   await page.reload();
   await expect(root).toHaveAttribute("data-theme", "light");
+  await openSettings(page);
   await expect(appearance.getByRole("button", { name: "浅色", exact: true })).toHaveAttribute("aria-pressed", "true");
 
   const other = await context.newPage();
   await other.goto("/");
   await expect(other.locator("html")).toHaveAttribute("data-theme", "light");
+  await openSettings(other);
   await other.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "深色", exact: true }).click();
   await expect(root).toHaveAttribute("data-theme", "dark");
   await expect(appearance.getByRole("button", { name: "深色", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -431,6 +458,7 @@ test("appearance follows the system, persists manual choices, and syncs across t
   await expect(root).toHaveAttribute("data-theme", "dark");
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#171c22");
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  await openSettings(page);
   await appearance.getByRole("button", { name: "跟随系统" }).click();
   await page.emulateMedia({ colorScheme: "light" });
   await expect(root).toHaveAttribute("data-theme", "light");
@@ -439,7 +467,7 @@ test("appearance follows the system, persists manual choices, and syncs across t
   expect(errors).toEqual([]);
 });
 
-test("dark Markdown, search highlights, source dialog, and mobile appearance remain readable", async ({ page }) => {
+test("dark Markdown, search highlights, settings dialog, and mobile appearance remain readable", async ({ page }) => {
   const file = path.join(path.dirname(f.codexFile), "theme-rendering.jsonl");
   const content = [
     "深色模式阅读验证",
@@ -488,11 +516,15 @@ test("dark Markdown, search highlights, source dialog, and mobile appearance rem
     });
     for (const { selector, ratio } of contrasts) expect(ratio, selector).toBeGreaterThanOrEqual(4.5);
     await page.screenshot({ path: path.join(tmpdir(), "echo-dark-desktop.png"), animations: "disabled" });
+    await openSettings(page);
     await page.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "浅色", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.getByRole("button", { name: "关闭设置" }).click();
     await page.screenshot({ path: path.join(tmpdir(), "echo-light-desktop.png"), animations: "disabled" });
+    await openSettings(page);
     await page.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "深色", exact: true }).click();
 
+    await page.getByRole("button", { name: "关闭设置" }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator(".reader")).toBeVisible();
     await expect(page.locator(".markdown pre")).toBeInViewport();
@@ -500,15 +532,18 @@ test("dark Markdown, search highlights, source dialog, and mobile appearance rem
     expect(await page.locator("body").evaluate(el => el.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole("button", { name: "返回会话列表" }).click();
     await page.getByRole("button", { name: "打开项目导航" }).click();
+    await openSettings(page);
     const appearance = page.getByRole("group", { name: "外观主题" });
     await expect(appearance).toBeInViewport();
-    await page.getByRole("button", { name: "数据源", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "本地数据源", exact: true })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCSS("color-scheme", "dark");
     await page.screenshot({ path: path.join(tmpdir(), "echo-dark-sources.png"), animations: "disabled" });
-    await page.getByRole("button", { name: "关闭数据源" }).click();
     await appearance.getByRole("button", { name: "浅色", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".sidebar")).toBeVisible();
     await page.locator(".close-sidebar").click();
     await expect(page.getByRole("heading", { name: "会话历史", exact: true })).toBeVisible();
   } finally {
@@ -542,6 +577,7 @@ test("appearance is applied before React loads and tolerates unavailable or inva
   await blocked.goto("/");
   await expect(blocked.getByRole("heading", { name: "会话历史", exact: true })).toBeVisible();
   await expect(blocked.locator("html")).toHaveAttribute("data-theme", "dark");
+  await openSettings(blocked);
   await blocked.getByRole("group", { name: "外观主题" }).getByRole("button", { name: "浅色", exact: true }).click();
   await expect(blocked.locator("html")).toHaveAttribute("data-theme", "light");
   await blocked.reload();
@@ -557,4 +593,85 @@ test("appearance is applied before React loads and tolerates unavailable or inva
   await expect(invalid.locator("html")).toHaveAttribute("data-theme-preference", "system");
   await expect(invalid.locator("html")).toHaveAttribute("data-theme", "light");
   await invalid.close();
+});
+
+test("scroll-to-bottom controls scroll independently and reach newly appended messages on desktop and mobile", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const files = Array.from({ length: 20 }, (_, index) =>
+    path.join(path.dirname(f.codexFile), `scroll-control-${index}.jsonl`),
+  );
+  const longPrompt = [
+    "滚动验证主会话",
+    ...Array.from({ length: 60 }, (_, index) => `历史段落 ${index + 1}：检查长会话中跳到底部的行为，以及会话列表和阅读区各自独立的滚动位置。`),
+    "主会话末尾",
+  ].join("\n\n");
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => {
+    if (["error", "warning"].includes(message.type())) errors.push(message.text());
+  });
+  const gap = (selector: string) => page.locator(selector).evaluate(
+    el => Math.max(0, el.scrollHeight - el.clientHeight - el.scrollTop),
+  );
+  try {
+    await Promise.all(files.map((file, index) => writeFile(file, jsonl([
+      { type: "session_meta", payload: { id: `scroll-control-${index}`, cwd: "/Projects/scroll-controls" } },
+      {
+        type: "event_msg",
+        timestamp: index === 0 ? "2026-11-07T00:00:00Z" : "2026-11-06T00:00:00Z",
+        payload: { type: "user_message", message: index === 0 ? longPrompt : `滚动列表验证 ${index}` },
+      },
+    ]))));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    await expect(page.locator(".session-row")).toHaveCount(23, { timeout: 10000 });
+    await page.locator(".session-row").filter({ hasText: "滚动验证主会话" }).click();
+    const readerButton = page.locator(".reader").getByRole("button", { name: "滚动到底部", exact: true });
+    const listButton = page.locator(".session-list").getByRole("button", { name: "滚动到底部", exact: true });
+    await expect(readerButton).toBeVisible();
+    await expect.poll(() => gap(".messages")).toBeGreaterThan(200);
+    await expect.poll(() => gap(".session-scroll")).toBeGreaterThan(200);
+    const initialListTop = await page.locator(".session-scroll").evaluate(el => el.scrollTop);
+    await readerButton.click();
+    await expect.poll(() => gap(".messages")).toBeLessThan(2);
+    await expect(page.getByText("主会话末尾", { exact: true })).toBeInViewport();
+    expect(await page.locator(".session-scroll").evaluate(el => el.scrollTop)).toBe(initialListTop);
+    const readerTop = await page.locator(".messages").evaluate(el => el.scrollTop);
+    await listButton.click();
+    await expect.poll(() => gap(".session-scroll")).toBeLessThan(2);
+    await expect(page.locator(".session-row").last()).toBeInViewport();
+    expect(await page.locator(".messages").evaluate(el => el.scrollTop)).toBe(readerTop);
+
+    await appendFile(files[0], jsonl([{
+      type: "event_msg",
+      timestamp: "2026-11-07T08:00:00Z",
+      payload: { type: "user_message", message: "滚动按钮验证：最新追加的消息" },
+    }]));
+    const appended = page.getByText("滚动按钮验证：最新追加的消息", { exact: true });
+    await expect(appended).toBeVisible({ timeout: 10000 });
+    expect(await page.locator(".messages").evaluate(el => el.scrollTop)).toBe(readerTop);
+    await readerButton.click();
+    await expect.poll(() => gap(".messages")).toBeLessThan(2);
+    await expect(appended).toBeInViewport();
+    const messageBox = await appended.boundingBox();
+    const buttonBox = await readerButton.boundingBox();
+    expect(messageBox!.y + messageBox!.height).toBeLessThanOrEqual(buttonBox!.y);
+    await page.screenshot({ path: path.join(tmpdir(), "echo-scroll-bottom-desktop.png"), animations: "disabled" });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(readerButton).toBeInViewport();
+    await readerButton.click();
+    await expect.poll(() => gap(".messages")).toBeLessThan(2);
+    await expect(appended).toBeInViewport();
+    await page.screenshot({ path: path.join(tmpdir(), "echo-scroll-bottom-mobile.png"), animations: "disabled" });
+    await page.getByRole("button", { name: "返回会话列表" }).click();
+    await expect(listButton).toBeInViewport();
+    await listButton.click();
+    await expect.poll(() => gap(".session-scroll")).toBeLessThan(2);
+    await expect(page.locator(".session-row").last()).toBeInViewport();
+    expect(await page.locator("body").evaluate(el => el.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+  } finally {
+    await Promise.all(files.map(file => rm(file, { force: true })));
+  }
 });
