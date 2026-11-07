@@ -12,6 +12,7 @@ import { providerNames, type Session } from "../../shared/types";
 import { shortPath, dateTime } from "../format";
 import ReplyToggle from "./ReplyToggle";
 import CopyButton from "./CopyButton";
+import ScrollToBottomButton from "./ScrollToBottomButton";
 import { searchHighlight } from "../searchHighlight";
 
 const markdownPlugins = [remarkGfm];
@@ -152,6 +153,7 @@ export default function Reader({
           </header>
           <div
             ref={scrollRef}
+            id="conversation-messages"
             className="messages"
             aria-label="消息内容"
             aria-live="polite"
@@ -232,6 +234,13 @@ export default function Reader({
           ) : null}
         </div>
       )}
+      {!error && ready && session && session.messages.length > 0 ? (
+        <ScrollToBottomButton
+          targetRef={scrollRef}
+          controls="conversation-messages"
+          title="滚动到底部，查看最新消息"
+        />
+      ) : null}
       <footer className="reader-footer">
         <LockKeyhole size={15} />
         <span>只读浏览 · 原始会话文件不会被修改。</span>

@@ -1,4 +1,5 @@
 import { FolderOpen, SearchX, PanelLeft, X } from "lucide-react";
+import { useRef } from "react";
 import {
   providerNames,
   type Provider,
@@ -6,6 +7,7 @@ import {
 } from "../../shared/types";
 import { dayLabel, time } from "../format";
 import ReplyToggle from "./ReplyToggle";
+import ScrollToBottomButton from "./ScrollToBottomButton";
 
 export default function SessionList({
   sessions,
@@ -40,6 +42,7 @@ export default function SessionList({
   includeAssistant: boolean;
   onToggle: () => void;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const groups = new Map<string, SessionSummary[]>();
   for (const session of sessions) {
     const label = dayLabel(session.updatedAt);
@@ -107,7 +110,12 @@ export default function SessionList({
           <ReplyToggle checked={includeAssistant} onToggle={onToggle} />
         </div>
       </header>
-      <div className="session-scroll" aria-busy={loading}>
+      <div
+        ref={scrollRef}
+        id="session-scroll"
+        className="session-scroll"
+        aria-busy={loading}
+      >
         {error ? (
           <div className="empty compact">
             <p>{error}</p>
@@ -160,6 +168,9 @@ export default function SessionList({
           ))
         )}
       </div>
+      {!error && sessions.length > 0 ? (
+        <ScrollToBottomButton targetRef={scrollRef} controls="session-scroll" />
+      ) : null}
     </section>
   );
 }
