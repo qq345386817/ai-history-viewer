@@ -12,6 +12,18 @@ export function time(value: string): string {
     hour12: false,
   });
 }
+export function dateTime(value: string): string {
+  return new Date(value)
+    .toLocaleString("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+    .replaceAll("/", "-");
+}
 export function dayLabel(value: string): string {
   const date = new Date(value);
   const today = new Date();

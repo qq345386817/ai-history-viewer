@@ -794,8 +794,10 @@ pre,
 }
 .message-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 15px;
+  row-gap: 4px;
   min-height: 26px;
   padding-top: 0;
   margin-bottom: 5px;
@@ -808,6 +810,7 @@ pre,
   font-size: 12px;
   color: var(--subtle);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .markdown {
   font-size: 15px;

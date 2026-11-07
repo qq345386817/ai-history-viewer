@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { providerNames, type Session } from "../../shared/types";
-import { shortPath, time } from "../format";
+import { shortPath, dateTime } from "../format";
 import ReplyToggle from "./ReplyToggle";
 import CopyButton from "./CopyButton";
 import { searchHighlight } from "../searchHighlight";
@@ -176,7 +176,7 @@ export default function Reader({
                       dateTime={m.timestamp}
                       title={new Date(m.timestamp).toLocaleString("zh-CN")}
                     >
-                      {time(m.timestamp)}
+                      {dateTime(m.timestamp)}
                     </time>
                     <CopyButton content={m.content} />
                   </div>
