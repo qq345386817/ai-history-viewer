@@ -3,7 +3,7 @@ import type { Provider } from "../shared/types";
 import Sidebar from "./components/Sidebar";
 import SessionList from "./components/SessionList";
 import Reader from "./components/Reader";
-import SourcesDialog from "./components/SourcesDialog";
+import SettingsDialog from "./components/SettingsDialog";
 import { useHistory, useSession } from "./hooks/useHistory";
 
 export default function App() {
@@ -20,7 +20,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const { catalog, error, connected, loading, refresh, refreshKey } =
     useHistory(query, includeAssistant);
@@ -82,16 +82,7 @@ export default function App() {
   return (
     <div className={`app ${showDetail ? "show-detail" : ""}`}>
       <Sidebar
-        catalog={catalog}
         projects={projects}
-        providers={providers}
-        onToggleProvider={(p) =>
-          setProviders((current) =>
-            current.includes(p)
-              ? current.filter((value) => value !== p)
-              : [...current, p],
-          )
-        }
         projectId={effectiveProject}
         onProject={(id) => {
           setQuery("");
@@ -107,7 +98,7 @@ export default function App() {
           setShowDetail(false);
         }}
         searchRef={searchRef}
-        onSources={() => setSourcesOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
         mobileOpen={mobileOpen}
         onClose={() => setMobileOpen(false)}
       />
@@ -158,10 +149,18 @@ export default function App() {
         onBack={() => setShowDetail(false)}
         refreshing={loading}
       />
-      <SourcesDialog
-        open={sourcesOpen}
-        onClose={() => setSourcesOpen(false)}
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
         catalog={catalog}
+        providers={providers}
+        onToggleProvider={(provider) =>
+          setProviders((current) =>
+            current.includes(provider)
+              ? current.filter((value) => value !== provider)
+              : [...current, provider],
+          )
+        }
       />
     </div>
   );

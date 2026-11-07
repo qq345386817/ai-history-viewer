@@ -1,6 +1,5 @@
 import {
-  Check,
-  Database,
+  Settings,
   Folder,
   Layers,
   LockKeyhole,
@@ -8,40 +7,28 @@ import {
   Search,
   X,
 } from "lucide-react";
-import {
-  providerNames,
-  type Catalog,
-  type Project,
-  type Provider,
-} from "../../shared/types";
+import type { Project } from "../../shared/types";
 import { shortPath } from "../format";
 import type { RefObject } from "react";
-import ThemeControl from "./ThemeControl";
 
 export default function Sidebar({
-  catalog,
   projects,
-  providers,
-  onToggleProvider,
   projectId,
   onProject,
   query,
   onQuery,
   searchRef,
-  onSources,
+  onSettings,
   mobileOpen,
   onClose,
 }: {
-  catalog: Catalog | null;
   projects: Project[];
-  providers: Provider[];
-  onToggleProvider: (provider: Provider) => void;
   projectId: string;
   onProject: (id: string) => void;
   query: string;
   onQuery: (query: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
-  onSources: () => void;
+  onSettings: () => void;
   mobileOpen: boolean;
   onClose: () => void;
 }) {
@@ -111,33 +98,15 @@ export default function Sidebar({
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="provider-legend">
-            {(["codex", "gemini", "claude"] as Provider[]).map((provider) => (
-              <button
-                type="button"
-                key={provider}
-                className={`provider-filter ${providers.includes(provider) ? "active" : ""}`}
-                aria-label={`筛选 ${providerNames[provider]}`}
-                aria-pressed={providers.includes(provider)}
-                onClick={() => onToggleProvider(provider)}
-              >
-                <span className="provider-check">
-                  {providers.includes(provider) ? <Check size={12} /> : null}
-                </span>
-                <span className={`dot ${provider}`} />
-                <span>{providerNames[provider]}</span>
-                <span className="legend-count">
-                  {catalog?.sources.find((s) => s.provider === provider)
-                    ?.sessions ?? "—"}
-                </span>
-              </button>
-            ))}
-          </div>
-          <button className="sources-button" onClick={onSources}>
-            <Database size={17} />
-            数据源
+          <button
+            className="settings-button"
+            onClick={onSettings}
+            aria-haspopup="dialog"
+            aria-controls="settings-dialog"
+          >
+            <Settings size={17} />
+            设置
           </button>
-          <ThemeControl />
           <p className="readonly">
             <LockKeyhole size={13} />
             只读访问
