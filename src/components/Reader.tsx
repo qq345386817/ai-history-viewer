@@ -5,17 +5,14 @@ import {
   MessageSquareText,
   RefreshCw,
 } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useEffect, useRef } from "react";
 import { providerNames, type Session } from "../../shared/types";
 import { shortPath, dateTime } from "../format";
 import ReplyToggle from "./ReplyToggle";
 import CopyButton from "./CopyButton";
 import ScrollToBottomButton from "./ScrollToBottomButton";
-import { searchHighlight } from "../searchHighlight";
+import MessageContent from "./MessageContent";
 
-const markdownPlugins = [remarkGfm];
 export default function Reader({
   session,
   selectedId,
@@ -46,15 +43,6 @@ export default function Reader({
   showDetail: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const rehypePlugins = useMemo(
-    () => [
-      [searchHighlight, { query }] as [
-        typeof searchHighlight,
-        { query: string },
-      ],
-    ],
-    [query],
-  );
   useEffect(() => {
     if (!ready) return;
     const frame = requestAnimationFrame(() => {
@@ -182,39 +170,7 @@ export default function Reader({
                     </time>
                     <CopyButton content={m.content} />
                   </div>
-                  <div className="markdown">
-                    <Markdown
-                      remarkPlugins={markdownPlugins}
-                      rehypePlugins={rehypePlugins}
-                      skipHtml
-                      components={{
-                        a: ({ children, href }) => (
-                          <a
-                            href={href}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                          >
-                            {children}
-                          </a>
-                        ),
-                        img: ({ alt }) => (
-                          <span className="attachment">
-                            [图片附件{alt ? `：${alt}` : ""}]
-                          </span>
-                        ),
-                        input: ({ checked }) => (
-                          <input
-                            type="checkbox"
-                            checked={checked || false}
-                            disabled
-                            readOnly
-                          />
-                        ),
-                      }}
-                    >
-                      {m.content}
-                    </Markdown>
-                  </div>
+                  <MessageContent message={m} query={query} />
                 </div>
               </article>
             ))}

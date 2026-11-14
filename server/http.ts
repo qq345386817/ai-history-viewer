@@ -2,6 +2,7 @@ import { createServer, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { HistoryStore } from "./store.js";
+import { publicMessage, readImage } from "./media.js";
 
 type Middleware = (req: any, res: any, next: (error?: unknown) => void) => void;
 export function createHistoryServer(
@@ -36,7 +37,7 @@ export function createHistoryServer(
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader(
       "Content-Security-Policy",
-      `default-src 'self'; script-src 'self'${options.dev ? " 'unsafe-inline'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`,
+      `default-src 'self'; script-src 'self'${options.dev ? " 'unsafe-inline'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`,
     );
     if (!["GET", "HEAD"].includes(req.method || "")) {
       res.setHeader("Allow", "GET, HEAD");
@@ -102,6 +103,27 @@ export function createHistoryServer(
         json(200, catalog);
         return;
       }
+      if (url.pathname.startsWith("/api/media/")) {
+        const parts = url.pathname.slice("/api/media/".length).split("/").map(decodeURIComponent);
+        const session = parts.length === 3 ? store.get(parts[0]) : undefined;
+        const message = session?.messages.find((m) => m.id === parts[1]);
+        const image = session && message &&
+          (message.role === "user" || url.searchParams.get("includeAssistant") === "true")
+          ? await readImage(session, message, parts[2]) : null;
+        if (!image) {
+          json(404, { error: "图片不可用，原始文件可能已被移除或格式不受支持" });
+          return;
+        }
+        res.writeHead(200, {
+          "Content-Type": image.mime,
+          "Content-Length": image.data.length,
+          "Cache-Control": "no-store",
+          // This also protects opening an SVG as a top-level document.
+          "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+        });
+        res.end(req.method === "HEAD" ? undefined : image.data);
+        return;
+      }
       if (url.pathname.startsWith("/api/sessions/")) {
         const id = decodeURIComponent(
           url.pathname.slice("/api/sessions/".length),
@@ -117,7 +139,7 @@ export function createHistoryServer(
           ...session,
           messages: session.messages.filter(
             (m) => includeAssistant || m.role === "user",
-          ),
+          ).map((m) => publicMessage(session, m)),
         });
         return;
       }

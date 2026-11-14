@@ -7,8 +7,9 @@ import {
   normalizeProjectPath,
   sessionTitle,
   jsonLines,
+  generatedImageMessage,
 } from "./parsers.js";
-import type { Message, Session } from "../shared/types.js";
+import type { StoredMessage as Message, StoredSession as Session } from "./types.js";
 
 type Row = Record<string, any>;
 export class CodexAppReader {
@@ -169,7 +170,7 @@ export class CodexAppReader {
         }
       }
       const getItems = history?.prepare(
-        "SELECT item_json, created_at_ms FROM thread_items WHERE thread_id=? AND item_type IN ('userMessage','agentMessage') ORDER BY rollout_ordinal, created_at_ms, item_id",
+        "SELECT item_json, created_at_ms FROM thread_items WHERE thread_id=? AND item_type IN ('userMessage','agentMessage','imageGeneration') ORDER BY rollout_ordinal, created_at_ms, item_id",
       );
       for (const row of threads) {
         add(row.cwd);
@@ -199,6 +200,11 @@ export class CodexAppReader {
           for (const item of getItems.all(row.id) as Row[]) {
             try {
               const data = JSON.parse(item.item_json);
+              if (data.type === "imageGeneration") {
+                const m = generatedImageMessage(data, item.created_at_ms, fallback);
+                if (m) messages.push(m);
+                continue;
+              }
               if (
                 data.type === "agentMessage" &&
                 data.phase &&

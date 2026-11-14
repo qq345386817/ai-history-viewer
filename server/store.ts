@@ -6,9 +6,10 @@ import type {
   Catalog,
   Project,
   Provider,
-  Session,
   SourceStatus,
 } from "../shared/types.js";
+import type { StoredSession as Session } from "./types.js";
+import { imageSources } from "./media.js";
 import type { Config } from "./config.js";
 import { CodexAppReader } from "./codex-app.js";
 import {
@@ -347,6 +348,22 @@ export class HistoryStore extends EventEmitter {
             file.endsWith(".jsonl"))
         )
           sessions.set(entry.session.id, entry.session);
+      }
+      // Generated images live in separate App items, even when JSONL has newer text.
+      for (const appSession of app.sessions) {
+        const session = sessions.get(appSession.id);
+        if (!session || session === appSession) continue;
+        const generated = appSession.messages.filter((m) => m.generatedImage);
+        if (!generated.length) continue;
+        const ids = new Set(session.messages.map((m) => m.id));
+        const sources = new Set(session.messages.flatMap((m) => [...imageSources(m).values()]));
+        const extra = generated.filter((m) => !ids.has(m.id) &&
+          ![...imageSources(m).values()].some((source) => sources.has(source)));
+        if (extra.length) {
+          const messages = [...session.messages, ...extra].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+          sessions.set(session.id, { ...session, messages,
+            assistantCount: messages.filter((m) => m.role === "assistant").length });
+        }
       }
       // Keep authoritative names after choosing the freshest message body (DB or JSONL).
       for (const [id, session] of sessions) {

@@ -10,6 +10,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  media?: Record<string, { url: string | null; remote: boolean }>;
 }
 export interface SessionSummary {
   id: string;

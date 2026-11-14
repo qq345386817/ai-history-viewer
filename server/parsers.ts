@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { Message, Provider, Session } from "../shared/types.js";
+import { existsSync } from "node:fs";
+import type { Message, Provider } from "../shared/types.js";
+import type { StoredMessage as ParsedMessage, StoredSession as Session } from "./types.js";
 import { providerNames } from "../shared/types.js";
 
 // Provider files are versioned independently. Read only the fields needed for display.
@@ -39,9 +41,19 @@ export function projectKey(projectPath: string): string {
     : normalized;
 }
 export function contentText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
+  return parseContent(content).text;
+}
+function parseContent(content: unknown): { text: string; images: Record<string, string> } {
+  const images: Record<string, string> = {};
+  const image = (source: unknown) => {
+    if (typeof source !== "string" || !source.trim()) return "[图片附件]";
+    const id = `echo-image:${hash(source).slice(0, 24)}`;
+    images[id] = source;
+    return `![图片附件](${id})`;
+  };
+  if (typeof content === "string") return { text: content, images };
+  if (!Array.isArray(content)) return { text: "", images };
+  const text = content
     .map((part: unknown) => {
       if (typeof part === "string") return part;
       if (!part || typeof part !== "object") return "";
@@ -52,13 +64,32 @@ export function contentText(content: unknown): string {
         !p.thought
       )
         return p.text;
-      if (p.type === "image" || p.type === "input_image" || p.inlineData)
-        return "[图片附件]";
-      if (p.fileData || p.type === "document") return "[文件附件]";
+      if (p.thought) return "";
+      const inline = p.inlineData || p.inline_data;
+      if (inline) {
+        const mime = inline.mimeType || inline.mime_type;
+        return typeof mime === "string" && mime.startsWith("image/")
+          ? image(`data:${mime};base64,${inline.data || ""}`)
+          : "[文件附件]";
+      }
+      if (["image", "input_image", "output_image", "image_url", "localImage", "local_image"].includes(p.type)) {
+        const source = p.source;
+        return image(
+          source?.type === "base64"
+            ? `data:${source.media_type};base64,${source.data || ""}`
+            : source?.url || p.image_url?.url || p.image_url || p.url || p.path,
+        );
+      }
+      const file = p.fileData || p.file_data;
+      const mime = file?.mimeType || file?.mime_type;
+      if (file && typeof mime === "string" && mime.startsWith("image/"))
+        return image(file.fileUri || file.file_uri);
+      if (file || p.type === "document") return "[文件附件]";
       return "";
     })
     .filter(Boolean)
     .join("\n");
+  return { text, images };
 }
 function date(value: unknown, fallback: string): string {
   const timestamp =
@@ -82,8 +113,9 @@ export function message(
   content: unknown,
   timestamp: unknown,
   fallback: string,
-): Message | null {
-  const text = contentText(content)
+): ParsedMessage | null {
+  const parsed = parseContent(content);
+  const text = parsed.text
     .replace(
       /<(environment_context|system-reminder|user_instructions)>[\s\S]*?<\/\1>/g,
       "",
@@ -95,12 +127,25 @@ export function message(
     role,
     content: text,
     timestamp: date(timestamp, fallback),
+    ...(Object.keys(parsed.images).length ? { imageSources: parsed.images } : {}),
   };
+}
+export function generatedImageMessage(data: RecordData, timestamp: unknown, fallback: string): ParsedMessage | null {
+  if (data.failure || !["completed", "complete", "succeeded"].includes(data.status)) return null;
+  const saved = data.savedPath || data.saved_path;
+  const source = typeof saved === "string" && existsSync(saved)
+    ? saved
+    : typeof data.result === "string" && data.result
+      ? (data.result.startsWith("data:") ? data.result : `data:image/${data.output_format || "png"};base64,${data.result}`)
+      : saved;
+  if (!source) return null;
+  const m = message(`generated:${data.id || hash(source).slice(0, 24)}`, "assistant", [{ type: "image", image_url: source }], timestamp, fallback);
+  return m ? { ...m, generatedImage: true } : null;
 }
 export function assemble(
   provider: Provider,
   meta: RecordData,
-  messages: Message[],
+  messages: ParsedMessage[],
   ctx: ParseContext,
   unknownProject = "",
 ): Session | null {
@@ -118,7 +163,9 @@ export function assemble(
     : unknownProject
       ? `未识别项目 · ${providerNames[provider]} · ${unknownProject.slice(0, 8)}`
       : `未识别项目 · ${providerNames[provider]}`;
-  const firstText = users[0].content.replace(/\s+/g, " ").trim();
+  const firstText = users[0].content
+    .replace(/!\[图片附件\]\(echo-image:[a-f\d]+\)/g, "[图片附件]")
+    .replace(/\s+/g, " ").trim();
   return {
     id: `${provider}:${hash(nativeId + ":" + projectId).slice(0, 32)}`,
     nativeId,
@@ -162,12 +209,16 @@ export async function* jsonLines(filePath: string): AsyncGenerator<RecordData> {
 
 export async function parseCodex(ctx: ParseContext): Promise<Session | null> {
   let meta: RecordData = {};
-  const responses: Message[] = [];
-  const events: Message[] = [];
+  const responses: ParsedMessage[] = [];
+  const events: ParsedMessage[] = [];
   for await (const row of jsonLines(ctx.filePath)) {
     const p = row.payload || {};
     if (row.type === "session_meta") meta = { ...p, id: p.id || p.session_id };
     if (row.type === "turn_context" && !meta.cwd && p.cwd) meta.cwd = p.cwd;
+    if (row.type === "response_item" && p.type === "image_generation_call") {
+      const m = generatedImageMessage(p, row.timestamp, ctx.mtime);
+      if (m) responses.push(m);
+    }
     if (row.type === "event_msg" && p.type === "user_message") {
       const m = message(p.id, "user", p.message, row.timestamp, ctx.mtime);
       if (m) events.push(m);
@@ -210,7 +261,7 @@ export async function parseCodex(ctx: ParseContext): Promise<Session | null> {
 
 export async function parseClaude(ctx: ParseContext): Promise<Session | null> {
   let meta: RecordData = {};
-  const messages = new Map<string, Message>();
+  const messages = new Map<string, ParsedMessage>();
   for await (const row of jsonLines(ctx.filePath)) {
     if (row.cwd && !meta.cwd) meta.cwd = row.cwd;
     if (row.sessionId) meta.id = row.sessionId;
@@ -304,6 +355,16 @@ export async function parseGemini(ctx: ParseContext): Promise<Session | null> {
       row.timestamp,
       fallback,
     );
+    // Gemini can store a display string separately from multimodal content.
+    if (m && row.displayContent != null && Array.isArray(row.content)) {
+      const raw = parseContent(row.content);
+      for (const [key, source] of Object.entries(raw.images)) {
+        if (!m.imageSources?.[key]) {
+          m.content += `\n\n![图片附件](${key})`;
+          (m.imageSources ||= {})[key] = source;
+        }
+      }
+    }
     return m ? [m] : [];
   });
   return assemble(
