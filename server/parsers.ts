@@ -142,6 +142,34 @@ export function generatedImageMessage(data: RecordData, timestamp: unknown, fall
   const m = message(`generated:${data.id || hash(source).slice(0, 24)}`, "assistant", [{ type: "image", image_url: source }], timestamp, fallback);
   return m ? { ...m, generatedImage: true } : null;
 }
+
+function formatQuestionReply(message: ParsedMessage): ParsedMessage {
+  if (message.role !== "user") return message;
+  const match = /^<send_user_message_question_reply>([\s\S]*?)<\/send_user_message_question_reply>$/.exec(message.content);
+  if (!match) return message;
+
+  let entries: unknown;
+  try {
+    entries = JSON.parse(match[1]);
+  } catch {
+    return message;
+  }
+  if (!Array.isArray(entries) || !entries.length) return message;
+
+  const questionReplies = [];
+  for (const entry of entries) {
+    if (
+      typeof entry?.question !== "string" || !entry.question.trim() ||
+      typeof entry.answer !== "string"
+    ) return message;
+    questionReplies.push({ question: entry.question.trim(), answer: entry.answer.trim() });
+  }
+  const content = questionReplies.map(({ question, answer }) =>
+    `问题：${question}\n你的回答：${answer || "未作答"}`,
+  ).join("\n\n");
+  return { ...message, content, questionReplies };
+}
+
 export function assemble(
   provider: Provider,
   meta: RecordData,
@@ -149,6 +177,7 @@ export function assemble(
   ctx: ParseContext,
   unknownProject = "",
 ): Session | null {
+  if (provider === "codex") messages = messages.map(formatQuestionReply);
   const users = messages.filter((m) => m.role === "user");
   if (!users.length) return null;
   const nativeId = String(
@@ -163,7 +192,8 @@ export function assemble(
     : unknownProject
       ? `未识别项目 · ${providerNames[provider]} · ${unknownProject.slice(0, 8)}`
       : `未识别项目 · ${providerNames[provider]}`;
-  const firstText = users[0].content
+  const firstReply = users[0].questionReplies?.[0];
+  const firstText = (firstReply?.question ?? users[0].content)
     .replace(/!\[图片附件\]\(echo-image:[a-f\d]+\)/g, "[图片附件]")
     .replace(/\s+/g, " ").trim();
   return {
@@ -174,7 +204,7 @@ export function assemble(
     projectPath,
     projectName,
     title: sessionTitle(meta.name, meta.title) || firstText.slice(0, 100),
-    preview: firstText.slice(0, 200),
+    preview: (firstReply?.answer.replace(/\s+/g, " ") || firstText).slice(0, 200),
     createdAt: date(
       meta.startTime || meta.timestamp,
       messages[0]?.timestamp || ctx.mtime,

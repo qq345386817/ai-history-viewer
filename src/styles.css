@@ -842,6 +842,55 @@ pre,
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.question-replies {
+  display: grid;
+  gap: 10px;
+  max-width: 640px;
+}
+.question-reply {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.question-reply dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.question-reply dd {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.question-reply .question-reply-question {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.question-reply-answer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--assistant-border);
+  border-radius: 8px;
+  background: var(--selected);
+  color: var(--text);
+}
+.question-reply-answer svg {
+  align-self: flex-start;
+  margin-top: 3px;
+  flex: none;
+  color: var(--accent);
+}
+.question-reply mark {
+  background: var(--highlight);
+  color: var(--highlight-text);
+}
 .markdown {
   font-size: 15px;
   line-height: 1.85;

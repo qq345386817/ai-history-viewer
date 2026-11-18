@@ -1,7 +1,10 @@
 import { Check, Copy, AlertCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-export default function CopyButton({ content }: { content: string }) {
+export default function CopyButton({ content, title = "复制原始文本（保留 Markdown）" }: {
+  content: string;
+  title?: string;
+}) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -25,7 +28,7 @@ export default function CopyButton({ content }: { content: string }) {
       title={
         status === "error"
           ? "无法访问剪贴板，请选择文本手动复制"
-          : "复制原始文本（保留 Markdown）"
+          : title
       }
     >
       {status === "copied" ? (

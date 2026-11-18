@@ -21,7 +21,7 @@ export function imageSources(message: StoredMessage): Map<string, string> {
   const cached = cache.get(message);
   if (cached) return cached;
   const sources = new Map<string, string>();
-  if (!message.content.includes("[")) {
+  if (message.questionReplies || !message.content.includes("[")) {
     cache.set(message, sources);
     return sources;
   }
@@ -80,6 +80,7 @@ export function publicMessage(session: StoredSession, message: StoredMessage): M
     };
   }
   return { id: message.id, role: message.role, content: message.content, timestamp: message.timestamp,
+    ...(message.questionReplies ? { questionReplies: message.questionReplies } : {}),
     ...(Object.keys(media).length ? { media } : {}) };
 }
 

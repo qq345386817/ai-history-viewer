@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { fixtures, jsonl, timestamp } from "./fixtures.js";
 import {
+  assemble,
+  message,
   contentText,
   normalizeProjectPath,
   parseClaude,
@@ -10,6 +12,31 @@ import {
   parseGemini,
   projectKey,
 } from "../server/parsers.js";
+
+test("Codex question replies become searchable pairs while literal mentions and invalid records survive", () => {
+  const rows = [
+    { question: "保留哪个方案？", answer: "保留本地版", questionItemId: "hidden-id" },
+    { question: "还需要调整什么？", answer: "第一行\n第二行" },
+    { question: "确认时间？", answer: "" },
+  ];
+  const wrapped = `<send_user_message_question_reply>\n${JSON.stringify(rows)}\n</send_user_message_question_reply>`;
+  const literal = "请解释 `<send_user_message_question_reply>` 的用途";
+  const invalid = "<send_user_message_question_reply>[{}]</send_user_message_question_reply>";
+  const session = assemble("codex", {}, [wrapped, literal, invalid].map((value, i) =>
+    message(`message-${i}`, "user", value, timestamp, timestamp)!,
+  ), { filePath: "/test/session.jsonl", mtime: timestamp })!;
+
+  assert.equal(session.userCount, 3);
+  assert.equal(session.title, "保留哪个方案？");
+  assert.equal(session.preview, "保留本地版");
+  assert.deepEqual(session.messages[0].questionReplies, rows.map(({ question, answer }) => ({ question, answer })));
+  assert.equal(session.messages[0].timestamp, timestamp);
+  assert.match(session.messages[0].content, /第一行\n第二行/);
+  assert.doesNotMatch(session.messages[0].content, /send_user_message_question_reply|hidden-id/);
+  assert.equal(session.messages[1].content, literal);
+  assert.equal(session.messages[2].content, invalid);
+  assert.equal(session.messages[2].questionReplies, undefined);
+});
 
 test("Codex: deduplicate event/response prompts, retain repeated user turns, exclude injected context, reasoning and tools", async () => {
   const f = await fixtures();

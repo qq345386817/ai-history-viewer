@@ -1,14 +1,16 @@
 import type { Root, RootContent, Element } from "hast";
 
+export function searchPattern(query: string): RegExp | null {
+  const text = query.trim();
+  return text ? new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu") : null;
+}
+
 // Add highlights in the Markdown render tree, without mutating React's DOM.
 export function searchHighlight({ query }: { query: string }) {
-  const text = query.trim();
+  const search = searchPattern(query);
+  if (!search) return;
+  const pattern = search;
   return (tree: Root) => {
-    if (!text) return;
-    const pattern = new RegExp(
-      text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      "giu",
-    );
     function visit(parent: Root | Element) {
       parent.children = parent.children.flatMap((node): RootContent[] => {
         if (node.type === "element") {

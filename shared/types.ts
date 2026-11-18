@@ -5,11 +5,17 @@ export const providerNames: Record<Provider, string> = {
   claude: "Claude",
 };
 
+export interface QuestionReply {
+  question: string;
+  answer: string;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  questionReplies?: QuestionReply[];
   media?: Record<string, { url: string | null; remote: boolean }>;
 }
 export interface SessionSummary {

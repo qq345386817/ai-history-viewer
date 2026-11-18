@@ -12,6 +12,7 @@ import ReplyToggle from "./ReplyToggle";
 import CopyButton from "./CopyButton";
 import ScrollToBottomButton from "./ScrollToBottomButton";
 import MessageContent from "./MessageContent";
+import QuestionReplies from "./QuestionReplies";
 
 export default function Reader({
   session,
@@ -168,9 +169,13 @@ export default function Reader({
                     >
                       {dateTime(m.timestamp)}
                     </time>
-                    <CopyButton content={m.content} />
+                    <CopyButton content={m.content} title={m.questionReplies ? "复制问题和答案" : undefined} />
                   </div>
-                  <MessageContent message={m} query={query} />
+                  {m.questionReplies ? (
+                    <QuestionReplies replies={m.questionReplies} query={query} />
+                  ) : (
+                    <MessageContent message={m} query={query} />
+                  )}
                 </div>
               </article>
             ))}

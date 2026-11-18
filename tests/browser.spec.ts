@@ -46,6 +46,74 @@ test.afterAll(async () => {
   if (f) await rm(f.dir, { recursive: true, force: true });
 });
 
+test("Codex question replies render together, remain searchable, and fit mobile dark mode", async ({ page, context }) => {
+  const file = path.join(path.dirname(f.codexFile), "rollout-question-replies.jsonl");
+  const question = "请选择备份方式";
+  const answer = "仅保存到本机";
+  const payload = JSON.stringify([
+    { question, answer, questionItemId: "internal-question-id" },
+    { question: "补充说明", answer: "第一行\n第二行 <保留原文>" },
+  ]);
+  const source = jsonl([
+    { type: "session_meta", payload: { id: "qa-session", cwd: "/Projects/qa-reader" } },
+    {
+      type: "response_item",
+      timestamp: "2026-11-08T01:00:00Z",
+      payload: {
+        id: "qa-reply",
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: `<send_user_message_question_reply>${payload}</send_user_message_question_reply>` }],
+      },
+    },
+  ]);
+  await writeFile(file, source);
+  try {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto("/");
+    await expect(page).toHaveTitle("回声 Echo · AI 会话历史");
+    const search = page.getByRole("textbox", { name: "搜索会话" });
+    await search.fill(answer);
+    const row = page.locator(".session-row").filter({ hasText: question });
+    await expect(row).toHaveCount(1);
+    await row.click();
+    const record = page.locator('[data-message-id="qa-reply"]');
+    const cards = record.locator(".question-reply");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first().locator("dt")).toHaveText(["AI 提问", "你的回答"]);
+    await expect(cards.first().locator(".question-reply-question")).toHaveText(question);
+    await expect(cards.first().locator("mark[data-search-match]")).toHaveText(answer);
+    await expect(cards.last()).toContainText("第二行 <保留原文>");
+    await expect(record.locator("time")).toHaveText("2026-11-08 09:00");
+    await expect(record).not.toContainText("internal-question-id");
+    await expect(record).not.toContainText("send_user_message_question_reply");
+    await record.getByRole("button", { name: "复制消息内容", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
+      `问题：${question}\n你的回答：${answer}\n\n问题：补充说明\n你的回答：第一行\n第二行 <保留原文>`,
+    );
+    await page.screenshot({ path: path.join(tmpdir(), "echo-question-replies-desktop.png") });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(cards.first()).toBeInViewport();
+    expect(await record.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+    await page.screenshot({ path: path.join(tmpdir(), "echo-question-replies-mobile-dark.png") });
+    expect(errors).toEqual([]);
+    expect(await readFile(file, "utf8")).toBe(source);
+  } finally {
+    await rm(file, { force: true });
+    // The shared fixture catalog must settle before the next test starts.
+    await expect.poll(async () => {
+      const response = await fetch("http://127.0.0.1:14317/api/catalog");
+      return (await response.json()).sessions.length;
+    }).toBe(3);
+  }
+});
+
 test("desktop: project grouping, tool filter, search, reply switch, settings dialog and read-only rendering", async ({
   page,
 }) => {
