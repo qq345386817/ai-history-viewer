@@ -308,6 +308,21 @@ test("mobile: list → reader → back, project drawer and no horizontal overflo
   ).toBeVisible();
 });
 
+test("user messages display single line breaks alongside Markdown paragraphs and code", async ({ page }) => {
+  await page.goto("/");
+  await page.locator(".session-row").filter({ hasText: "帮我检查一下登录页面" }).click();
+  const message = page.locator('.message.user[data-message-id="u1"] .markdown');
+  const paragraphs = message.locator(":scope > p");
+  await expect(paragraphs).toHaveCount(2);
+  await expect(paragraphs.first().locator("br")).toHaveCount(2);
+  expect(await paragraphs.first().innerText()).toBe(
+    "错误提示需要更清晰：\n区分网络问题、密码错误和账号不存在这三种情况。\n保留 重试 操作。",
+  );
+  await expect(paragraphs.first().locator("strong")).toHaveText("重试");
+  await expect(paragraphs.last()).toHaveText("请参考以下代码。");
+  await expect(message.locator("pre code")).toContainText('setStatus("loading");');
+});
+
 test("copy user and AI messages preserves the original Markdown and reports clipboard errors", async ({
   page,
   context,

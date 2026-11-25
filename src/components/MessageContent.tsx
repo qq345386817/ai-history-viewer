@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { ImageOff, ImagePlus, ExternalLink } from "lucide-react";
 import type { Message } from "../../shared/types";
 import { searchHighlight } from "../searchHighlight";
 
 const markdownPlugins = [remarkGfm];
+const userMarkdownPlugins = [remarkGfm, remarkBreaks];
 
 function MessageImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
   const remote = /^https?:\/\//i.test(src || "");
@@ -59,7 +61,7 @@ export default function MessageContent({ message, query }: { message: Message; q
     };
   }, [mediaKey]);
   return <div className="markdown">
-    <Markdown remarkPlugins={markdownPlugins} rehypePlugins={rehypePlugins} skipHtml
+    <Markdown remarkPlugins={message.role === "user" ? userMarkdownPlugins : markdownPlugins} rehypePlugins={rehypePlugins} skipHtml
       urlTransform={(url, key) => {
         const media = message.media && Object.hasOwn(message.media, url) ? message.media[url] : undefined;
         if (media) return media.url || "";

@@ -37,7 +37,18 @@ export async function fixtures() {
   );
   const prompts = [
     "帮我检查一下登录页面的状态管理，看看有没有可以优化的地方。",
-    '错误提示需要更清晰：区分网络问题、密码错误和账号不存在这三种情况。\n\n```tsx\nconst [status, setStatus] = useState("idle");\n```',
+    [
+      "错误提示需要更清晰：",
+      "区分网络问题、密码错误和账号不存在这三种情况。  ",
+      "保留 **重试** 操作。",
+      "",
+      "请参考以下代码。",
+      "",
+      "```tsx",
+      'const [status, setStatus] = useState("idle");',
+      'setStatus("loading");',
+      "```",
+    ].join("\n"),
     "保留现有的视觉风格，把 loading 和禁用状态一起补齐。",
     "很好，再检查一下键盘操作和移动端显示。",
   ];
