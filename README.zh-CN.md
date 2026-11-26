@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-本地 AI 会话历史阅读器。支持 **Codex、Gemini CLI、Claude Code**，用浏览器查看，原始会话文件始终只读。
+本地 AI 会话历史阅读器。支持 **Codex、Gemini、Claude Code**，用浏览器查看，原始会话文件始终只读。
 
 ## 启动
 
@@ -71,12 +71,12 @@ npm stop
 | 来源        | 默认目录与格式                                                   | 项目识别                                              |
 | ----------- | ---------------------------------------------------------------- | ----------------------------------------------------- |
 | Codex       | JSONL 与 App 的 `state_*.sqlite`、`thread_history_1.sqlite` | App 项目归属、项目根目录、会话 `cwd` |
-| Gemini CLI  | `~/.gemini/tmp/*/chats/session-*.json`、`.jsonl`                 | 项目注册表、会话中的真实路径、已知路径的 SHA-256 映射 |
+| Gemini      | `~/.gemini/tmp/*/chats/session-*.json`、`.jsonl`，以及 `~/.gemini/antigravity/`（`conversation_summaries.db` 与 `brain/*/.system_generated/logs/transcript*.jsonl`） | 项目注册表、会话中的真实路径、Antigravity 工作区 URI 与项目配置、已知路径的 SHA-256 映射 |
 | Claude Code | `~/.claude/projects/*/*.jsonl`                                   | 记录中的 `cwd`                                        |
 
 尊重 `CODEX_HOME`、`CLAUDE_CONFIG_DIR`，以及 Gemini 的 `GEMINI_CLI_HOME`（其下的 `.gemini` 目录）。也可通过下述配置直接指定来源目录。
 
-Codex 的重复 event/response 用户消息会合并，用户真正重复发送的消息仍会保留。Gemini JSONL 支持 `$patch`、`$set`、`$rewindTo`，迁移后并存的 JSON/JSONL 会话会去重。子智能体的独立文件不纳入主会话列表。
+Codex 的重复 event/response 用户消息会合并，用户真正重复发送的消息仍会保留。Gemini CLI 的 JSONL 支持 `$patch`、`$set`、`$rewindTo`，迁移后并存的 JSON/JSONL 会话会去重。Antigravity 会以只读方式读取 `conversation_summaries.db`、`annotations/*.pbtxt` 与 `brain/*/.system_generated/logs/transcript_full.jsonl`（回退到 `transcript.jsonl`），仅纳入使用 Gemini 模型的会话，并保留标题、工作区路径和上传图片预览。子智能体的独立文件不纳入主会话列表。
 
 Codex App 数据库以 SQLite `readOnly` 模式打开；优先尊重 App 的项目归属，回退到会话工作目录，并对数据库/JSONL 重复会话去重。App 保存的项目目录、旧版项目配置也用于还原 Gemini 项目哈希；还会只读枚举已知项目父目录的一层目录名（30 秒缓存），仅通过完整 SHA-256 完全匹配建立映射，项目路径识别不递归搜索主目录或读取项目文件内容；图片预览仅额外读取会话中明确引用的图片文件。
 

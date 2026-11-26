@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Read-only local AI conversation history for Codex, Gemini CLI and Claude Code",
+  "description": "Read-only local AI conversation history for Codex, Gemini and Claude Code",
   "engines": {
     "node": ">=22.13"
   },

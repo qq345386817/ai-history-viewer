@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A local AI conversation history reader for **Codex, Gemini CLI, and Claude Code**. Browse your conversations in a web browser while keeping the original session files read-only.
+A local AI conversation history reader for **Codex, Gemini, and Claude Code**. Browse your conversations in a web browser while keeping the original session files read-only.
 
 ## Getting started
 
@@ -71,12 +71,12 @@ State, the service plist, and `service.log` are stored under `~/Library/Applicat
 | Source | Default locations and formats | Project identification |
 | --- | --- | --- |
 | Codex | JSONL files and the app's `state_*.sqlite` and `thread_history_1.sqlite` databases | App project assignments, project roots, and session `cwd` |
-| Gemini CLI | `~/.gemini/tmp/*/chats/session-*.json` and `.jsonl` | Project registry, actual paths recorded in sessions, and SHA-256 mappings of known paths |
+| Gemini | `~/.gemini/tmp/*/chats/session-*.json` and `.jsonl`, plus `~/.gemini/antigravity/` (`conversation_summaries.db` and `brain/*/.system_generated/logs/transcript*.jsonl`) | Project registry, actual paths recorded in sessions, Antigravity workspace URIs and project configs, and SHA-256 mappings of known paths |
 | Claude Code | `~/.claude/projects/*/*.jsonl` | The `cwd` recorded in each session |
 
 Echo respects `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, and Gemini's `GEMINI_CLI_HOME` (using the `.gemini` directory inside it). You can also set source directories explicitly using the configuration below.
 
-Duplicate Codex user messages recorded in both event and response entries are merged, while prompts genuinely sent more than once are preserved. Gemini JSONL supports `$patch`, `$set`, and `$rewindTo`; duplicate JSON and JSONL sessions left after migration are deduplicated. Separate subagent files are excluded from the main session list.
+Duplicate Codex user messages recorded in both event and response entries are merged, while prompts genuinely sent more than once are preserved. Gemini CLI JSONL supports `$patch`, `$set`, and `$rewindTo`; duplicate JSON and JSONL sessions left after migration are deduplicated. Antigravity history is read in read-only mode from `conversation_summaries.db`, `annotations/*.pbtxt`, and `brain/*/.system_generated/logs/transcript_full.jsonl` (falling back to `transcript.jsonl`), including only Gemini-model sessions while preserving titles, workspace paths, and uploaded image previews. Separate subagent files are excluded from the main session list.
 
 Codex App databases are opened in SQLite `readOnly` mode. App project assignments take precedence, with the session working directory used as a fallback. Duplicate sessions found in both databases and JSONL files are deduplicated. Project directories saved by the app and legacy project configurations also help resolve Gemini project hashes. Echo additionally lists directory names one level below known project parent directories, with a 30-second cache. Mappings require an exact match of the complete SHA-256 hash; project-path discovery does not recursively scan your home directory or inspect project file contents. Image previews read only image files explicitly referenced in a session.
 
