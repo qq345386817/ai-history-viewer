@@ -89,11 +89,7 @@ export default function SettingsDialog({
                       </span>
                       <span className={`dot ${provider}`} />
                       {providerNames[provider]}
-                      {provider === "gemini"
-                        ? " CLI"
-                        : provider === "claude"
-                          ? " Code"
-                          : ""}
+                      {provider === "claude" ? " Code" : ""}
                     </strong>
                     <span>
                       {!source
@@ -121,8 +117,8 @@ export default function SettingsDialog({
             })}
           </div>
           <p className="source-note">
-            Codex 包含已归档会话。Gemini
-            通过项目注册信息和已知路径还原项目；无法识别的项目会保留独立分组。
+            Codex 包含已归档会话。Gemini 同时读取 Gemini CLI 与 Antigravity
+            中的 Gemini 会话，并通过项目注册信息和已知路径还原旧版项目；无法识别的项目会保留独立分组。
           </p>
           <p className="source-note">
             自定义目录与项目映射：启动时传入{" "}

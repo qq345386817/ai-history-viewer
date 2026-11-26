@@ -13,6 +13,12 @@ import { imageSources } from "./media.js";
 import type { Config } from "./config.js";
 import { CodexAppReader } from "./codex-app.js";
 import {
+  AntigravityReader,
+  antigravityConversationId,
+  discoverAntigravityFiles,
+  parseAntigravity,
+} from "./antigravity.js";
+import {
   hash,
   normalizeProjectPath,
   parseClaude,
@@ -24,6 +30,7 @@ const providers: Provider[] = ["codex", "claude", "gemini"];
 interface FileEntry {
   filePath: string;
   provider: Provider;
+  kind?: "antigravity";
   stamp: string;
   mtime: string;
 }
@@ -82,6 +89,7 @@ export class HistoryStore extends EventEmitter {
   private timer?: ReturnType<typeof setInterval>;
   private pending?: Promise<void>;
   private appReader: CodexAppReader;
+  private antigravityReader: AntigravityReader;
   private neighbors = new Set<string>();
   private neighborKey = "";
   private neighborChecked = 0;
@@ -132,6 +140,7 @@ export class HistoryStore extends EventEmitter {
   constructor(readonly config: Config) {
     super();
     this.appReader = new CodexAppReader(config.roots.codex);
+    this.antigravityReader = new AntigravityReader(config.roots.gemini);
   }
   snapshot(): Catalog {
     return this.catalog;
@@ -213,7 +222,7 @@ export class HistoryStore extends EventEmitter {
       sessions: 0,
       errors: 0,
     };
-    let files: string[] = [];
+    const files: Array<{ filePath: string; kind?: "antigravity" }> = [];
     try {
       if (provider === "codex") {
         const sets = await Promise.all(
@@ -221,33 +230,49 @@ export class HistoryStore extends EventEmitter {
             walk(path.join(root, dir), (f) => f.endsWith(".jsonl"), 6),
           ),
         );
-        files = sets.flat();
+        files.push(...sets.flat().map((filePath) => ({ filePath })));
       } else if (provider === "claude") {
-        files = await walk(
+        const found = await walk(
           path.join(root, "projects"),
           (f) => f.endsWith(".jsonl") && !path.basename(f).startsWith("agent-"),
           1,
         );
+        files.push(...found.map((filePath) => ({ filePath })));
       } else {
-        files = await walk(
-          path.join(root, "tmp"),
-          (f) =>
-            path.basename(path.dirname(f)) === "chats" &&
-            /^session-.*\.jsonl?$/.test(path.basename(f)),
-          2,
-        );
+        const [cliResult, agResult] = await Promise.allSettled([
+          walk(
+            path.join(root, "tmp"),
+            (f) =>
+              path.basename(path.dirname(f)) === "chats" &&
+              /^session-.*\.jsonl?$/.test(path.basename(f)),
+            2,
+          ),
+          discoverAntigravityFiles(root),
+        ]);
+        if (cliResult.status === "fulfilled")
+          files.push(...cliResult.value.map((filePath) => ({ filePath })));
+        else status.errors++;
+        if (agResult.status === "fulfilled")
+          files.push(
+            ...agResult.value.map((filePath) => ({
+              filePath,
+              kind: "antigravity" as const,
+            })),
+          );
+        else status.errors++;
       }
     } catch {
       status.errors++;
     }
     status.files = files.length;
     const entries = await Promise.all(
-      files.map(async (filePath) => {
+      files.map(async ({ filePath, kind }) => {
         try {
           const info = await stat(filePath);
           return {
             filePath,
             provider,
+            ...(kind ? { kind } : {}),
             stamp: `${info.mtimeMs}:${info.ctimeMs}:${info.size}`,
             mtime: info.mtime.toISOString(),
           };
@@ -261,9 +286,13 @@ export class HistoryStore extends EventEmitter {
   }
   private async scan(): Promise<void> {
     try {
-      const app = await this.appReader.read();
+      const [app, antigravity] = await Promise.all([
+        this.appReader.read(),
+        this.antigravityReader.read(),
+      ]);
       const known = new Set([
         ...app.paths,
+        ...antigravity.paths,
         ...[...this.sessions.values()].flatMap((s) =>
           s.projectPath ? [s.projectPath] : [],
         ),
@@ -277,9 +306,15 @@ export class HistoryStore extends EventEmitter {
       const codexSource = sources.find((s) => s.provider === "codex")!;
       codexSource.errors += app.errors;
       if (app.sessions.length) codexSource.files++;
-      // Codex/Claude cwd values also help resolve older hashed Gemini directories.
+      const geminiSource = sources.find((s) => s.provider === "gemini")!;
+      geminiSource.errors += antigravity.errors;
+      // Codex/Claude/Antigravity paths also help resolve older hashed Gemini CLI directories.
       for (const discovery of discoveries) {
-        const paths = await this.projectPaths([...app.paths, ...neighbors]);
+        const paths = await this.projectPaths([
+          ...app.paths,
+          ...antigravity.paths,
+          ...neighbors,
+        ]);
         const pathStamp = hash(
           JSON.stringify([...paths].sort(([a], [b]) => a.localeCompare(b))),
         );
@@ -288,27 +323,41 @@ export class HistoryStore extends EventEmitter {
           await Promise.all(
             discovery.files.slice(offset, offset + 8).map(async (file) => {
               seen.add(file.filePath);
+              const agId =
+                file.kind === "antigravity"
+                  ? antigravityConversationId(file.filePath)
+                  : "";
+              const agSummary = agId
+                ? antigravity.summaries.get(agId)
+                : undefined;
               const stamp =
                 file.stamp +
-                (file.provider === "gemini"
-                  ? pathStamp
-                  : file.provider === "codex"
-                    ? JSON.stringify([...app.overrides])
-                    : "");
+                (file.kind === "antigravity"
+                  ? JSON.stringify([agSummary || null, paths.get(agId) || ""])
+                  : file.provider === "gemini"
+                    ? pathStamp
+                    : file.provider === "codex"
+                      ? JSON.stringify([...app.overrides])
+                      : "");
               const cached = this.cache.get(file.filePath);
               if (cached?.stamp === stamp) return;
               try {
-                const parser =
-                  file.provider === "codex"
-                    ? parseCodex
-                    : file.provider === "claude"
-                      ? parseClaude
-                      : parseGemini;
-                const session = await parser({
-                  ...file,
-                  projectPaths: paths,
-                  codexProjects: app.overrides,
-                });
+                const session =
+                  file.kind === "antigravity"
+                    ? await parseAntigravity({
+                        ...file,
+                        projectPaths: paths,
+                        antigravitySummary: agSummary,
+                      })
+                    : await (file.provider === "codex"
+                        ? parseCodex
+                        : file.provider === "claude"
+                          ? parseClaude
+                          : parseGemini)({
+                        ...file,
+                        projectPaths: paths,
+                        codexProjects: app.overrides,
+                      });
                 this.cache.set(file.filePath, { stamp, session, error: false });
               } catch {
                 // Atomic rewrites and partial JSON may be transient. Keep the last valid view and retry.
@@ -413,6 +462,7 @@ export class HistoryStore extends EventEmitter {
         JSON.stringify([...this.cache].map(([f, c]) => [f, c.stamp, c.error])) +
           JSON.stringify(sources) +
           this.appReader.signature() +
+          this.antigravityReader.signature() +
           JSON.stringify([...app.titles]),
       );
       if (fingerprint !== this.fingerprint || this.catalog.scanning) {

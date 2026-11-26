@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
-import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { fixtures, jsonl } from "./fixtures";
@@ -179,7 +179,8 @@ test("desktop: project grouping, tool filter, search, reply switch, settings dia
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByRole("heading", { name: "外观", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "本地数据源", exact: true })).toBeVisible();
-  await expect(page.getByText("Gemini CLI", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Gemini", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Gemini CLI", { exact: true })).toHaveCount(0);
   await expect(page.locator(".source-toggle[aria-pressed='true']")).toHaveCount(3);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
@@ -543,6 +544,89 @@ test('Codex display names appear in list/header and refresh after metadata-only 
     await expect(page.locator('.session-row')).toHaveCount(1);
     await expect(page.locator('.session-row strong')).toHaveText('登录体验检查');
   } finally { await rm(index, {force:true}); }
+});
+
+test("Antigravity Gemini sessions appear under Gemini and exclude non-Gemini sessions", async ({ page }) => {
+  const agRoot = path.join(f.config.roots.gemini, "antigravity");
+  const geminiLogs = path.join(agRoot, "brain", "ag-gemini-e2e", ".system_generated", "logs");
+  const claudeLogs = path.join(agRoot, "brain", "ag-claude-e2e", ".system_generated", "logs");
+  const annotationsDir = path.join(agRoot, "annotations");
+  await Promise.all([
+    mkdir(geminiLogs, { recursive: true }),
+    mkdir(claudeLogs, { recursive: true }),
+    mkdir(annotationsDir, { recursive: true }),
+  ]);
+  await writeFile(
+    path.join(annotationsDir, "ag-gemini-e2e.pbtxt"),
+    'title:"Antigravity Gemini 验证"',
+  );
+  await writeFile(
+    path.join(geminiLogs, "transcript_full.jsonl"),
+    jsonl([
+      {
+        step_index: 0,
+        source: "USER_EXPLICIT",
+        type: "USER_INPUT",
+        status: "DONE",
+        created_at: "2026-11-08T02:00:00Z",
+        content: "<USER_REQUEST>\n在 Antigravity 里用 Gemini 检查样式\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nlocal time\n</ADDITIONAL_METADATA>",
+      },
+      {
+        step_index: 1,
+        source: "MODEL",
+        type: "PLANNER_RESPONSE",
+        status: "DONE",
+        created_at: "2026-11-08T02:01:00Z",
+        model: "gemini-4-neon-high",
+        thinking: "hidden antigravity thinking",
+        content: "已完成 Antigravity Gemini 样式检查。",
+      },
+    ]),
+  );
+  await writeFile(
+    path.join(claudeLogs, "transcript_full.jsonl"),
+    jsonl([
+      {
+        step_index: 0,
+        source: "USER_EXPLICIT",
+        type: "USER_INPUT",
+        status: "DONE",
+        created_at: "2026-11-08T02:02:00Z",
+        content: "<USER_REQUEST>\nAntigravity Claude 非 Gemini 会话\n</USER_REQUEST>",
+      },
+      {
+        step_index: 1,
+        source: "MODEL",
+        type: "PLANNER_RESPONSE",
+        status: "DONE",
+        created_at: "2026-11-08T02:03:00Z",
+        model: "claude-sonnet-4-5",
+        content: "Claude 回复",
+      },
+    ]),
+  );
+  try {
+    await page.goto("/");
+    await page.getByLabel("筛选 AI 工具").selectOption("gemini");
+    const row = page.locator(".session-row").filter({ hasText: "Antigravity Gemini 验证" });
+    await expect(row).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".session-row")).toHaveCount(2);
+    await expect(page.locator(".session-list")).not.toContainText("Antigravity Claude 非 Gemini 会话");
+    await row.click();
+    await expect(page.locator(".reader-header h2")).toHaveText("Antigravity Gemini 验证");
+    await expect(page.locator(".message.user")).toHaveText(/在 Antigravity 里用 Gemini 检查样式/);
+    await expect(page.locator(".messages")).not.toContainText("USER_REQUEST");
+    await expect(page.locator(".messages")).not.toContainText("ADDITIONAL_METADATA");
+    await page.getByRole("switch", { name: "显示 AI 回复" }).click();
+    await expect(page.locator(".message.assistant")).toContainText("已完成 Antigravity Gemini 样式检查。");
+    await expect(page.locator(".messages")).not.toContainText("hidden antigravity thinking");
+  } finally {
+    await rm(agRoot, { recursive: true, force: true });
+    await expect.poll(async () => {
+      const response = await fetch("http://127.0.0.1:14317/api/catalog");
+      return (await response.json()).sessions.length;
+    }).toBe(3);
+  }
 });
 
 test("appearance follows the system, persists manual choices, and syncs across tabs", async ({ page, context }) => {
