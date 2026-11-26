@@ -5,7 +5,7 @@ import {
   MessageSquareText,
   RefreshCw,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { providerNames, type Session } from "../../shared/types";
 import { shortPath, dateTime } from "../format";
 import ReplyToggle from "./ReplyToggle";
@@ -13,6 +13,7 @@ import CopyButton from "./CopyButton";
 import ScrollToBottomButton from "./ScrollToBottomButton";
 import MessageContent from "./MessageContent";
 import QuestionReplies from "./QuestionReplies";
+import ReaderSearch from "./ReaderSearch";
 
 export default function Reader({
   session,
@@ -44,38 +45,7 @@ export default function Reader({
   showDetail: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!ready) return;
-    const frame = requestAnimationFrame(() => {
-      const container = scrollRef.current;
-      if (!container) return;
-      const match = container.querySelector<HTMLElement>(
-        "mark[data-search-match]",
-      );
-      // Raw Markdown searches may include syntax absent from the rendered text.
-      const matchingMessage = session?.messages.find((m) =>
-        m.content
-          .toLocaleLowerCase()
-          .includes(query.trim().toLocaleLowerCase()),
-      );
-      const target =
-        match ||
-        (query.trim() && matchingMessage
-          ? [
-              ...container.querySelectorAll<HTMLElement>("[data-message-id]"),
-            ].find((el) => el.dataset.messageId === matchingMessage.id)
-          : null);
-      if (query.trim() && target)
-        target.scrollIntoView({
-          block: "center",
-          inline: "nearest",
-          behavior: "instant",
-        });
-      else container.scrollTo({ top: 0 });
-    });
-    return () => cancelAnimationFrame(frame);
-    // Live message updates deliberately preserve the reader's scroll position.
-  }, [selectedId, ready, query, navigationKey, showDetail, includeAssistant]);
+  const searchScope = JSON.stringify([selectedId, query, navigationKey, showDetail, includeAssistant]);
   return (
     <main className="reader" aria-label="会话阅读区">
       <div className="reader-topbar">
@@ -139,6 +109,13 @@ export default function Reader({
               </span>
               <ReplyToggle checked={includeAssistant} onToggle={onToggle} />
             </div>
+            <ReaderSearch
+              scrollRef={scrollRef}
+              messages={session.messages}
+              query={query}
+              scope={searchScope}
+              ready={ready}
+            />
           </header>
           <div
             ref={scrollRef}

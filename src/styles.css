@@ -710,6 +710,37 @@ pre,
   margin-top: 10px;
   min-height: 26px;
 }
+.reader-search {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.reader-search-position {
+  margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.reader-search button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 36px;
+  color: var(--text-secondary);
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.reader-search button:not(:disabled):hover {
+  background: var(--selected);
+  color: var(--accent);
+}
+.reader-search button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .reply-toggle {
   display: inline-flex;
   align-items: center;
@@ -1700,7 +1731,22 @@ pre,
   padding: 1px 0;
   scroll-margin: 70px 20px;
 }
+.messages mark[data-search-current] {
+  background: var(--project-selected);
+  color: var(--text);
+  outline: 2px solid var(--accent);
+  border-radius: 2px;
+}
+.message[data-search-current] .message-main {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+  border-radius: 4px;
+}
 @media (max-width: 700px) {
+  .reader-search button {
+    width: 44px;
+    height: 44px;
+  }
   .copy-message {
     font-size: 11px;
     padding: 5px;

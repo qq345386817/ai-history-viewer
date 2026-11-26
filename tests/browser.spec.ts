@@ -370,7 +370,7 @@ test("copy user and AI messages preserves the original Markdown and reports clip
   await expect(copy).toHaveText("复制失败");
 });
 
-test("source multi-select filters project counts; global search crosses the selected project and scrolls to the first match", async ({
+test("source multi-select filters project counts; global search navigates matches within a session", async ({
   page,
 }) => {
   const needle = "唯一定位词[ABC].*";
@@ -464,18 +464,65 @@ test("source multi-select filters project counts; global search crosses the sele
         .poll(() => page.locator(".messages").evaluate((el) => el.scrollTop))
         .toBeGreaterThan(500);
     }
+    const navigation = page.getByRole("group", { name: "会话内搜索导航" });
+    const position = navigation.getByRole("status");
+    const previous = navigation.getByRole("button", { name: "上一个匹配" });
+    const next = navigation.getByRole("button", { name: "下一个匹配" });
+    const current = page.locator(".messages [data-search-current]");
+    await expect(position).toHaveText("1 / 2");
+    await expect(page.locator("pre mark[data-search-current]")).toBeInViewport();
+    await previous.click();
+    await expect(position).toHaveText("2 / 2");
+    await expect(page.locator("p mark[data-search-current]")).toBeInViewport();
+    await next.click();
+    await expect(position).toHaveText("1 / 2");
+    await next.click();
+    await expect(position).toHaveText("2 / 2");
+
+    await appendFile(files[1], jsonl([{
+      type: "event_msg",
+      timestamp: "2026-11-05T03:00:00Z",
+      payload: { type: "user_message", message: `新消息：${needle}` },
+    }]));
+    await expect(position).toHaveText("2 / 3");
+    await expect(page.locator("p mark[data-search-current]")).toBeInViewport();
+    await next.click();
+    await expect(position).toHaveText("3 / 3");
+    await expect(page.locator(".message").filter({ hasText: "新消息：" }).locator("[data-search-current]")).toBeInViewport();
+    await expect(current).toHaveCount(1);
+
     await page.locator(".messages").evaluate((el) => el.scrollTo({ top: 0 }));
     await page.locator(".session-row").first().click();
     await expect(page.locator(".messages mark").first()).toBeInViewport();
+    await expect(position).toHaveText("1 / 3");
     await page.screenshot({
       path: path.join(tmpdir(), "echo-search-match.png"),
       animations: "disabled",
     });
-    await page.getByRole("textbox", { name: "搜索会话" }).fill("search-target");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(navigation).toBeInViewport();
+    await next.click();
+    await expect(position).toHaveText("2 / 3");
+    await expect(current).toBeInViewport();
+    await page.screenshot({ path: path.join(tmpdir(), "echo-search-navigation-mobile.png") });
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    const search = page.getByRole("textbox", { name: "搜索会话" });
+    await search.fill("```text");
+    await expect(position).toHaveText("1 / 1");
+    await expect(page.locator("article[data-search-current]")).toBeInViewport();
+    await expect(next).toBeDisabled();
+    await search.fill("search-target");
     await expect(page.locator(".messages mark")).toHaveCount(0);
+    await expect(position).toHaveText("会话内无匹配");
+    await expect(previous).toBeDisabled();
+    await expect(next).toBeDisabled();
     await expect
       .poll(() => page.locator(".messages").evaluate((el) => el.scrollTop))
       .toBe(0);
+    await search.clear();
+    await expect(navigation).toHaveCount(0);
+    await expect(current).toHaveCount(0);
   } finally {
     await Promise.all(files.map((file) => rm(file, { force: true })));
   }
