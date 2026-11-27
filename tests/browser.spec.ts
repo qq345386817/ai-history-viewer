@@ -889,3 +889,120 @@ test("scroll-to-bottom controls scroll independently and reach newly appended me
     await Promise.all(files.map(file => rm(file, { force: true })));
   }
 });
+
+test("search history persists recent terms, shows suggestions below input on focus, supports keyboard/click reuse, deletion and clear", async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => {
+    if (["error", "warning"].includes(message.type())) errors.push(message.text());
+  });
+
+  await page.goto("/");
+  const search = page.getByRole("textbox", { name: "搜索会话" });
+  const list = page.getByRole("listbox", { name: "搜索历史" });
+
+  // No dropdown when history is empty.
+  await search.click();
+  await expect(list).toHaveCount(0);
+
+  // Record via Enter and via clicking a matching session row.
+  await search.fill("键盘操作");
+  await search.press("Enter");
+  await expect(list).toHaveCount(0);
+
+  await search.fill("登录页面");
+  await expect(page.locator(".session-row")).toHaveCount(1);
+  await page.locator(".session-row").first().click();
+
+  await search.fill("API 请求超时");
+  await search.press("Enter");
+
+  // Reload to verify persistence in localStorage.
+  await page.reload();
+  await search.click();
+  await expect(list).toBeVisible();
+  const options = list.getByRole("option");
+  await expect(options).toHaveCount(3);
+  await expect(options.nth(0)).toContainText("API 请求超时");
+  await expect(options.nth(1)).toContainText("登录页面");
+  await expect(options.nth(2)).toContainText("键盘操作");
+
+  // Dropdown sits directly below the search input.
+  const inputBox = await page.locator(".search").boundingBox();
+  const dropdownBox = await page.locator(".search-suggestions").boundingBox();
+  expect(dropdownBox!.y).toBeGreaterThanOrEqual(inputBox!.y + inputBox!.height);
+  expect(Math.abs(dropdownBox!.x - inputBox!.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(dropdownBox!.width - inputBox!.width)).toBeLessThanOrEqual(2);
+
+  // Filtering highlights matched substring.
+  await search.fill("登录");
+  await expect(options).toHaveCount(1);
+  await expect(options.first().locator(".search-suggestion-match")).toHaveText("登录");
+
+  // Keyboard selection with ArrowDown + Enter fills query, closes dropdown, and promotes item to top.
+  await search.press("ArrowDown");
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await search.press("Enter");
+  await expect(search).toHaveValue("登录页面");
+  await expect(list).toHaveCount(0);
+  await expect(page.locator(".session-row")).toHaveCount(1);
+
+  // Clearing search and focusing shows "登录页面" promoted to #1.
+  await page.getByRole("button", { name: "清空搜索" }).click();
+  await search.click();
+  await expect(options).toHaveCount(3);
+  await expect(options.nth(0)).toContainText("登录页面");
+
+  // Clicking a suggestion populates input and filters sessions.
+  await options.nth(2).locator(".search-suggestion-item").click();
+  await expect(search).toHaveValue("键盘操作");
+  await expect(list).toHaveCount(0);
+  await expect(page.locator(".session-row")).toHaveCount(1);
+
+  // Deleting a single item keeps dropdown open for remaining items.
+  await page.getByRole("button", { name: "清空搜索" }).click();
+  await search.click();
+  await expect(options).toHaveCount(3);
+  await page.getByRole("button", { name: "删除搜索记录：登录页面" }).click();
+  await expect(options).toHaveCount(2);
+  await expect(list).not.toContainText("登录页面");
+
+  // Mobile dark mode: Escape closes suggestions without closing sidebar drawer.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.getByRole("button", { name: "打开项目导航" }).click();
+  await expect(page.locator(".sidebar")).toHaveClass(/is-open/);
+  await search.click();
+  await expect(list).toBeVisible();
+  expect(await page.locator("body").evaluate(el => el.scrollWidth <= innerWidth)).toBe(true);
+  await search.press("Escape");
+  await expect(list).toHaveCount(0);
+  await expect(page.locator(".sidebar")).toHaveClass(/is-open/);
+
+  // Re-open and clear all history.
+  await search.click();
+  await expect(list).toBeVisible();
+  await page.getByRole("button", { name: "清空搜索历史" }).click();
+  await expect(list).toHaveCount(0);
+
+  // Verify cap at 10 items and cross-tab sync.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const other = await context.newPage();
+  await other.goto("/");
+  for (let i = 1; i <= 11; i++) {
+    await search.fill(`历史记录${i}`);
+    await search.press("Enter");
+  }
+  await page.getByRole("button", { name: "清空搜索" }).click();
+  await search.click();
+  await expect(options).toHaveCount(10);
+  await expect(options.first()).toContainText("历史记录11");
+  await expect(options.last()).toContainText("历史记录2");
+
+  const otherSearch = other.getByRole("textbox", { name: "搜索会话" });
+  await otherSearch.click();
+  await expect(other.getByRole("listbox", { name: "搜索历史" }).getByRole("option")).toHaveCount(10);
+  await other.close();
+
+  expect(errors).toEqual([]);
+});

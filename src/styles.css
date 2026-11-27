@@ -214,6 +214,11 @@ pre,
   font-size: 16px;
   letter-spacing: 0.3px;
 }
+.search-box {
+  position: relative;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
 .search {
   display: flex;
   align-items: center;
@@ -226,7 +231,6 @@ pre,
   padding: 0 12px;
   color: var(--muted);
   box-shadow: 0 1px 2px var(--control-shadow);
-  margin-bottom: 16px;
 }
 .search input {
   width: 0;
@@ -252,6 +256,96 @@ pre,
   font-size: 11px;
   white-space: nowrap;
   color: var(--muted);
+}
+.search-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--dialog-shadow);
+  overflow: hidden;
+}
+.search-suggestions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px 5px 12px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-soft);
+}
+.search-suggestions-clear {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.search-suggestions-clear:hover {
+  color: var(--error);
+  background: var(--hover);
+}
+.search-suggestions-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+}
+.search-suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 5px;
+}
+.search-suggestion-row:hover,
+.search-suggestion-row.active {
+  background: var(--hover);
+}
+.search-suggestion-row.active {
+  background: var(--selected);
+}
+.search-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 6px 7px 8px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.search-suggestion-item svg {
+  color: var(--muted);
+}
+.search-suggestion-item > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-suggestion-match {
+  color: var(--accent);
+  font-weight: 600;
+}
+.search-suggestion-remove {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 3px;
+  border-radius: 4px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.search-suggestion-remove:hover {
+  color: var(--text);
+  background: var(--sidebar-hover);
 }
 .nav-label {
   font-size: 12px;
@@ -1743,6 +1837,13 @@ pre,
   border-radius: 4px;
 }
 @media (max-width: 700px) {
+  .search-suggestion-item {
+    min-height: 40px;
+  }
+  .search-suggestion-remove {
+    width: 32px;
+    height: 32px;
+  }
   .reader-search button {
     width: 44px;
     height: 44px;

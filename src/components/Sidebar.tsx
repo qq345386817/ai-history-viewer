@@ -4,12 +4,12 @@ import {
   Layers,
   LockKeyhole,
   MessageSquareText,
-  Search,
   X,
 } from "lucide-react";
 import type { Project } from "../../shared/types";
 import { shortPath } from "../format";
 import type { RefObject } from "react";
+import SearchBox from "./SearchBox";
 
 export default function Sidebar({
   projects,
@@ -18,6 +18,10 @@ export default function Sidebar({
   query,
   onQuery,
   searchRef,
+  searchHistory,
+  onRecordSearchHistory,
+  onRemoveSearchHistory,
+  onClearSearchHistory,
   onSettings,
   mobileOpen,
   onClose,
@@ -28,6 +32,10 @@ export default function Sidebar({
   query: string;
   onQuery: (query: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
+  searchHistory: string[];
+  onRecordSearchHistory: (term: string) => void;
+  onRemoveSearchHistory: (term: string) => void;
+  onClearSearchHistory: () => void;
   onSettings: () => void;
   mobileOpen: boolean;
   onClose: () => void;
@@ -58,17 +66,15 @@ export default function Sidebar({
             <X size={19} />
           </button>
         </div>
-        <label className="search">
-          <Search size={17} />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
-            placeholder="搜索全部项目会话…"
-            aria-label="搜索会话"
-          />
-          <kbd>⌘ K</kbd>
-        </label>
+        <SearchBox
+          query={query}
+          onQuery={onQuery}
+          searchRef={searchRef}
+          history={searchHistory}
+          onRecordHistory={onRecordSearchHistory}
+          onRemoveHistory={onRemoveSearchHistory}
+          onClearHistory={onClearSearchHistory}
+        />
         <div className="nav-label">项目</div>
         <nav className="projects">
           <button

@@ -5,9 +5,16 @@ import SessionList from "./components/SessionList";
 import Reader from "./components/Reader";
 import SettingsDialog from "./components/SettingsDialog";
 import { useHistory, useSession } from "./hooks/useHistory";
+import { useSearchHistory } from "./hooks/useSearchHistory";
 
 export default function App() {
   const [query, setQuery] = useState("");
+  const {
+    history: searchHistory,
+    record: recordSearchHistory,
+    remove: removeSearchHistory,
+    clear: clearSearchHistory,
+  } = useSearchHistory();
   const [projectId, setProjectId] = useState("all");
   const [providers, setProviders] = useState<Provider[]>([
     "codex",
@@ -98,6 +105,10 @@ export default function App() {
           setShowDetail(false);
         }}
         searchRef={searchRef}
+        searchHistory={searchHistory}
+        onRecordSearchHistory={recordSearchHistory}
+        onRemoveSearchHistory={removeSearchHistory}
+        onClearSearchHistory={clearSearchHistory}
         onSettings={() => setSettingsOpen(true)}
         mobileOpen={mobileOpen}
         onClose={() => setMobileOpen(false)}
@@ -106,6 +117,7 @@ export default function App() {
         sessions={sessions}
         activeId={activeId}
         onSelect={(id) => {
+          if (query.trim()) recordSearchHistory(query);
           setSelectedId(id);
           setNavigationKey((k) => k + 1);
           setShowDetail(true);
